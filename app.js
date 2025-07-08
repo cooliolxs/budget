@@ -189,32 +189,71 @@ function renderBudgetAdjust() {
   </div>
   `;
   window.showAddAdjustForm = function() {
-    showModal(`
-      <h2>新增预算调整</h2>
-      <form id="add-adjust-form">
-        <label>科室</label><input name="dept"><br>
-        <label>项目</label><input name="project"><br>
-        <label>调整前</label><input name="before" type="number"><br>
-        <label>调整金额</label><input name="change" type="number"><br>
-        <label>调整后</label><input name="after" type="number"><br>
-        <label>原因</label><input name="reason"><br>
-        <button class="btn" type="submit">提交</button>
-      </form>
-    `);
-    $("#add-adjust-form").onsubmit = function(e) {
-      e.preventDefault();
-      const fd = new FormData(e.target);
-      budgetAdjusts.push({
-        id: budgetAdjusts.length+1,
-        dept: fd.get("dept"), project: fd.get("project"),
-        before: parseInt(fd.get("before")),
-        change: parseInt(fd.get("change")),
-        after: parseInt(fd.get("after")),
-        reason: fd.get("reason"),
-        status: "待审批", log:[]
-      });
-      closeModal(); renderBudgetAdjust();
-    }
+const approvedBudgets = budgets.filter(b => b.status === "已审批");
+if (approvedBudgets.length === 0) {
+  alert("暂无已审批的预算项目可供调整！");
+  return;
+}
+showModal(`
+  <h2>新增预算调整</h2>
+  <form id="add-adjust-form">
+    <label>预算项目</label>
+    <select id="select-budget" name="budgetId">
+      ${approvedBudgets.map(b => `<option value="${b.id}">${b.dept} - ${b.project}</option>`).join('')}
+    </select><br>
+    <input type="hidden" name="dept">
+    <input type="hidden" name="project">
+    <label>调整前</label><input name="before" id="before-amount" type="number" readonly><br>
+    <label>调整金额</label><input name="change" id="change-amount" type="number" value="0"><br>
+    <label>调整后</label><input name="after" id="after-amount" type="number" readonly><br>
+    <label>原因</label><input name="reason"><br>
+    <button class="btn" type="submit">提交</button>
+  </form>
+`);
+
+const form = $("#add-adjust-form");
+const selectBudget = $("#select-budget");
+const beforeInput = $("#before-amount");
+const changeInput = $("#change-amount");
+const afterInput  = $("#after-amount");
+
+function updateAmounts() {
+  const id = parseInt(selectBudget.value);
+  const bud = budgets.find(b => b.id === id);
+  if (!bud) return;
+  form.querySelector('input[name="dept"]').value = bud.dept;
+  form.querySelector('input[name="project"]').value = bud.project;
+  const beforeVal = bud.amount;
+  const changeVal = parseInt(changeInput.value) || 0;
+  beforeInput.value = beforeVal;
+  afterInput.value  = beforeVal + changeVal;
+}
+
+selectBudget.onchange = updateAmounts;
+changeInput.oninput = updateAmounts;
+updateAmounts();
+
+form.onsubmit = function(e) {
+  e.preventDefault();
+  const fd = new FormData(form);
+  const before = parseInt(fd.get("before"));
+  const change = parseInt(fd.get("change"));
+  const after  = parseInt(fd.get("after"));
+  budgetAdjusts.push({
+    id: budgetAdjusts.length + 1,
+    dept: fd.get("dept"),
+    project: fd.get("project"),
+    before: before,
+    change: change,
+    after: after,
+    reason: fd.get("reason"),
+    status: "待审批",
+    log: []
+  });
+  closeModal();
+  renderBudgetAdjust();
+};
+
   }
 }
 // ========== 预算执行监控 ==========
@@ -379,22 +418,36 @@ function renderReimbursePayment() {
   $("#content").innerHTML = `
   <div class="board">
     <div class="board-title"><h1>资金支付</h1></div>
-    <table class="table"><thead>
-      <tr><th>报销单号</th><th>发起人</th><th>金额</th><th>支付方式</th><th>支付日期</th><th>凭证</th><th>状态</th></tr>
-    </thead><tbody>
-      ${paymentRecords.map(p=>{
-        let r = reimburseList.find(x=>x.id===p.reimburseId);
-        return `<tr>
-          <td>${p.reimburseId}</td><td>${r?r.name:""}</td><td>${p.amount}</td>
-          <td>${p.method}</td><td>${p.payDate}</td>
-          <td>${p.voucher}</td>
-          <td><span class="status paid">已支付</span></td>
-        </tr>`;
-      }).join('')}
-    </tbody></table>
-  </div>
-  `;
+    <table class="table">
+      <thead>
+        <tr>
+          <th>报销单号</th><th>发起人</th><th>金额</th>
+          <th>支付方式</th><th>支付日期</th><th>凭证</th><th>状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${paymentRecords.map(p => {
+          const record = reimburseList.find(x => x.id === p.reimburseId);
+          return `
+            <tr>
+              <td>${p.reimburseId}</td>
+              <td>${record ? record.name : ""}</td>
+              <td>${p.amount}</td>
+              <td>${p.method}</td>
+              <td>${p.payDate}</td>
+              <td>
+                <a href="uploads/${p.voucher}" target="_blank" rel="noopener noreferrer">
+                  ${p.voucher}
+                </a>
+              </td>
+              <td><span class="status paid">已支付</span></td>
+            </tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+  </div>`;
 }
+
 // ========== 报销查询 ==========
 function renderReimburseQuery() {
   $("#content").innerHTML = `
@@ -508,4 +561,3 @@ function renderSetting() {
 window.onload = ()=>{ $("#home").style.display="block";
 $('li[data-section="budget-compilation"]').click(); }
 $("#modal").onclick = function(e){ if(e.target===this) closeModal(); }
-
