@@ -505,5 +505,7 @@ function renderSetting() {
   }
 }
 // ========== 默认显示首页 ==========
-window.onload = ()=>{ $("#home").style.display="block"; }
+window.onload = ()=>{ $("#home").style.display="block";
+$('li[data-section="budget-compilation"]').click(); }
 $("#modal").onclick = function(e){ if(e.target===this) closeModal(); }
+
